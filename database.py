@@ -117,8 +117,29 @@ class Database:
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             ''')
+            # جدول پیام‌های پشتیبانی
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS support_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'pending'
+            )
+        ''')
+        
+        # جدول سوالات متداول
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS faqs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL
+            )
+        ''')
+        
+        conn.commit()
             
-            conn.commit()
+            # conn.commit()
     
     # توابع مربوط به کاربران
     def add_user(self, telegram_id: int, username: str = None, 
@@ -372,3 +393,49 @@ class Database:
                 WHERE id = ?
             ''', (ticket_id,))
             conn.commit()
+
+
+
+    def save_support_message(self, user_id: int, message: str):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO support_messages (user_id, message)
+            VALUES (?, ?)
+        ''', (user_id, message))
+        self.conn.commit()
+
+    def get_faqs(self):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT question, answer FROM faqs')
+        faqs = cursor.fetchall()
+        return [{'question': row[0], 'answer': row[1]} for row in faqs]
+
+    def add_faq(self, question: str, answer: str):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO faqs (question, answer)
+            VALUES (?, ?)
+        ''', (question, answer))
+        self.conn.commit()
+
+    def get_support_messages(self, status='pending'):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT id, user_id, message, created_at, status 
+            FROM support_messages 
+            WHERE status = ?
+            ORDER BY created_at DESC
+        ''', (status,))
+        return cursor.fetchall()
+
+    def update_message_status(self, message_id: int, status: str):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            UPDATE support_messages 
+            SET status = ? 
+            WHERE id = ?
+        ''', (status, message_id))
+        self.conn.commit()
+
+    def __del__(self):
+        self.conn.close()

@@ -11,6 +11,11 @@ from telegram.ext import (
 import logging
 from datetime import datetime
 import os
+from database import Database
+from cache import Cache
+from file_manager import FileManager
+from payment import Payment
+from support import Support
 
 from config import (
     BOT_TOKEN, 
@@ -20,11 +25,8 @@ from config import (
     ALLOWED_EXTENSIONS,
     DEFAULT_MESSAGES
 )
-from database import Database
-from cache import Cache, cached
-from file_manager import FileManager
-from payment import Payment
-from support import Support
+
+
 
 # تنظیم لاگینگ
 logging.basicConfig(
@@ -33,7 +35,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ایجاد نمونه‌های مورد نیاز
+# ایجاد نمونه‌ها از کلاس‌ها
 db = Database()
 cache = Cache()
 file_manager = FileManager()
@@ -60,30 +62,45 @@ support = Support()
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
+# async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     user = update.effective_user
+#     context.user_data.clear()
+    
+#     if is_admin(user.id):
+#         keyboard = [
+#             [InlineKeyboardButton("👤 پنل کاربری", callback_data="user_panel")],
+#             [InlineKeyboardButton("👨‍💻 پنل مدیریت", callback_data="admin_panel")]
+#         ]
+#     else:
+#         keyboard = [
+#             [InlineKeyboardButton("📁 دسته‌بندی‌ها", callback_data="categories")],
+#             [InlineKeyboardButton("🔍 جستجو", callback_data="search")],
+#             [InlineKeyboardButton("👤 پروفایل من", callback_data="profile")],
+#             [InlineKeyboardButton("📞 پشتیبانی", callback_data="support")]
+#         ]
+    
+#     reply_markup = InlineKeyboardMarkup(keyboard)
+    
+#     await update.message.reply_text(
+#         f"سلام {user.first_name} عزیز! 👋\n" + DEFAULT_MESSAGES['welcome'],
+#         reply_markup=reply_markup
+#     )
+#     return MAIN_MENU
+
+# دستور شروع
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    context.user_data.clear()
-    
-    if is_admin(user.id):
-        keyboard = [
-            [InlineKeyboardButton("👤 پنل کاربری", callback_data="user_panel")],
-            [InlineKeyboardButton("👨‍💻 پنل مدیریت", callback_data="admin_panel")]
-        ]
-    else:
-        keyboard = [
-            [InlineKeyboardButton("📁 دسته‌بندی‌ها", callback_data="categories")],
-            [InlineKeyboardButton("🔍 جستجو", callback_data="search")],
-            [InlineKeyboardButton("👤 پروفایل من", callback_data="profile")],
-            [InlineKeyboardButton("📞 پشتیبانی", callback_data="support")]
-        ]
-    
+    keyboard = [
+        [InlineKeyboardButton("🛍 خرید", callback_data="shop")],
+        [InlineKeyboardButton("👤 پروفایل", callback_data="profile")],
+        [InlineKeyboardButton("📞 پشتیبانی", callback_data="support_menu")]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        f"سلام {user.first_name} عزیز! 👋\n" + DEFAULT_MESSAGES['welcome'],
+        "🌟 به ربات فروشگاهی ما خوش آمدید!\n"
+        "لطفاً یکی از گزینه‌های زیر را انتخاب کنید:",
         reply_markup=reply_markup
     )
-    return MAIN_MENU
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -111,7 +128,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return ADMIN_MENU
 
-@cached(ttl=300)  # کش برای 5 دقیقه
+# @cached(ttl=300)  # کش برای 5 دقیقه
 async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -203,6 +220,52 @@ async def show_file_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return FILE_SELECT
 
+# async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     query = update.callback_query
+#     await query.answer()
+    
+#     file_id = int(query.data.split("_")[1])
+#     file_info = db.get_file_info(file_id)
+    
+#     if not file_info:
+#         await query.edit_message_text("❌ فایل مورد نظر یافت نشد.")
+#         return MAIN_MENU
+    
+#     # بررسی خرید قبلی
+#     if db.check_purchase(query.from_user.id, file_id):
+#         keyboard = [
+#             [InlineKeyboardButton("📥 دانلود فایل", callback_data=f"download_{file_id}")],
+#             [InlineKeyboardButton("🔙 برگشت", callback_data=f"file_{file_id}")]
+#         ]
+#         reply_markup = InlineKeyboardMarkup(keyboard)
+        
+#         await query.edit_message_text(
+#             "✅ شما قبلاً این فایل را خریداری کرده‌اید.\n"
+#             "می‌توانید آن را دانلود کنید:",
+#             reply_markup=reply_markup
+#         )
+#         return FILE_SELECT
+    
+#     # ایجاد لینک پرداخت
+#     payment_link = payment.create_payment(
+#         amount=file_info['price'],
+#         user_id=query.from_user.id,
+#         file_id=file_id
+#     )
+    
+#     keyboard = [
+#         [InlineKeyboardButton("💳 پرداخت", url=payment_link)],
+#         [InlineKeyboardButton("🔙 برگشت", callback_data=f"file_{file_id}")]
+#     ]
+#     reply_markup = InlineKeyboardMarkup(keyboard)
+    
+#     await query.edit_message_text(
+#         f"💰 مبلغ قابل پرداخت: {file_info['price']:,} تومان\n"
+#         "برای پرداخت روی دکمه زیر کلیک کنید:",
+#         reply_markup=reply_markup
+#     )
+#     return PAYMENT_PROCESS
+
 async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -235,6 +298,10 @@ async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id=query.from_user.id,
         file_id=file_id
     )
+    
+    if payment_link is None:
+        await query.edit_message_text("❌ خطا در ایجاد لینک پرداخت. لطفاً دوباره تلاش کنید.")
+        return MAIN_MENU
     
     keyboard = [
         [InlineKeyboardButton("💳 پرداخت", url=payment_link)],
@@ -310,13 +377,66 @@ async def support_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return SUPPORT_CHAT
 
+async def handle_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await support.show_support_menu(update, context)
+
+async def handle_support_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await support.handle_support_message(update, context)
+
+async def handle_faq(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await support.show_faq(update, context)
+
+# هندلر برای callback های مختلف
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()  # پاسخ به callback برای حذف loading
+    
+    if query.data == "support_menu":
+        await support.show_support_menu(update, context)
+    elif query.data == "contact_support":
+        await query.edit_message_text(
+            "📝 لطفاً پیام خود را برای پشتیبانی ارسال کنید:",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 برگشت", callback_data="support_menu")
+            ]])
+        )
+    elif query.data == "faq":
+        await support.show_faq(update, context)
+    elif query.data == "main_menu":
+        keyboard = [
+            [InlineKeyboardButton("🛍 خرید", callback_data="shop")],
+            [InlineKeyboardButton("👤 پروفایل", callback_data="profile")],
+            [InlineKeyboardButton("📞 پشتیبانی", callback_data="support_menu")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            "🌟 به ربات فروشگاهی ما خوش آمدید!\n"
+            "لطفاً یکی از گزینه‌های زیر را انتخاب کنید:",
+            reply_markup=reply_markup
+        )
+
+# هندلر برای پیام‌های متنی
+async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_state = cache.get_user_state(update.effective_user.id)
+    if user_state == "waiting_support_message":
+        await support.handle_support_message(update, context)
+        # بعد از ارسال پیام، حالت کاربر را پاک می‌کنیم
+        cache.clear_user_state(update.effective_user.id)
+    else:
+        # اگر پیام در حالت خاصی نبود، منوی اصلی را نمایش می‌دهیم
+        await start(update, context)
+
+
 def main():
     # ایجاد پوشه‌های مورد نیاز
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     
     # ایجاد و راه‌اندازی ربات
-    application = Application.builder().token(BOT_TOKEN).build()
+    application = Application.builder().token("8194420539:AAGg3_bwmUiHJMVtZDnPRVtby9K7k5odmcE").build()
     
+    application.add_handler(CallbackQueryHandler(handle_support, pattern="^support_menu$"))
+    application.add_handler(CallbackQueryHandler(handle_faq, pattern="^faq$"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_support_message))
     # تعریف هندلرها
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
@@ -325,6 +445,7 @@ def main():
                 CallbackQueryHandler(admin_panel, pattern='^admin_panel$'),
                 CallbackQueryHandler(show_categories, pattern='^categories$'),
                 CallbackQueryHandler(support_chat, pattern='^support$'),
+                
             ],
             ADMIN_MENU: [
                 # هندلرهای پنل ادمین
@@ -351,8 +472,19 @@ def main():
     
     application.add_handler(conv_handler)
     
+     # اضافه کردن هندلرها
+    application.add_handler(CommandHandler("start", start))
+    
+    # یک CallbackQueryHandler کلی برای همه callback ها
+    application.add_handler(CallbackQueryHandler(button_callback))
+    
+    # هندلر برای پیام‌های متنی
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message_handler))
     # شروع ربات
+    print("Bot started...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
+  
+   
 if __name__ == '__main__':
     main()

@@ -14,8 +14,8 @@ ZARINPAL_REQUEST_URL = "https://api.zarinpal.com/pg/v4/payment/request.json"
 ZARINPAL_VERIFY_URL = "https://api.zarinpal.com/pg/v4/payment/verify.json"
 ZARINPAL_START_URL = "https://www.zarinpal.com/pg/StartPay/"
 
-# async def start_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-async def Payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     query = update.callback_query
     await query.answer()
     
@@ -94,3 +94,66 @@ async def verify_payment(authority: str, amount: int):
         print(f"Verify error: {str(e)}")
         db.update_payment_status(authority, 'failed')
         return False
+
+class Payment:
+    def __init__(self):
+        self.MERCHANT_ID = "YOUR_ZARINPAL_MERCHANT_ID"
+        self.CALLBACK_URL = "YOUR_CALLBACK_URL"
+        self.ZARINPAL_REQUEST_URL = "https://api.zarinpal.com/pg/v4/payment/request.json"
+        self.ZARINPAL_VERIFY_URL = "https://api.zarinpal.com/pg/v4/payment/verify.json"
+        self.ZARINPAL_START_URL = "https://www.zarinpal.com/pg/StartPay/"
+        self.db = Database()
+
+    def create_payment(self, amount: int, user_id: int, file_id: int) -> str:
+        payment_data = {
+            "merchant_id": self.MERCHANT_ID,
+            "amount": amount,
+            "description": f"خرید فایل {file_id}",
+            "callback_url": f"{self.CALLBACK_URL}?user_id={user_id}&file_id={file_id}",
+        }
+        
+        try:
+            response = requests.post(self.ZARINPAL_REQUEST_URL, json=payment_data)
+            response_data = response.json()
+            
+            if response_data['data']['code'] == 100:
+                authority = response_data['data']['authority']
+                
+                # ذخیره اطلاعات پرداخت در دیتابیس
+                self.db.create_payment(
+                    user_id=user_id,
+                    file_id=file_id,
+                    amount=amount,
+                    authority=authority,
+                    status='pending'
+                )
+                
+                return f"{self.ZARINPAL_START_URL}{authority}"
+                
+        except Exception as e:
+            print(f"Payment error: {str(e)}")
+            return None
+
+    async def verify_payment(self, authority: str, amount: int):
+        verify_data = {
+            "merchant_id": self.MERCHANT_ID,
+            "authority": authority,
+            "amount": amount
+        }
+        
+        try:
+            response = requests.post(self.ZARINPAL_VERIFY_URL, json=verify_data)
+            response_data = response.json()
+            
+            if response_data['data']['code'] == 100:
+                ref_id = response_data['data']['ref_id']
+                self.db.update_payment_status(authority, 'completed', ref_id)
+                return True
+            else:
+                self.db.update_payment_status(authority, 'failed')
+                return False
+                
+        except Exception as e:
+            print(f"Verify error: {str(e)}")
+            self.db.update_payment_status(authority, 'failed')
+            return False
