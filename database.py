@@ -117,29 +117,28 @@ class Database:
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             ''')
+
             # جدول پیام‌های پشتیبانی
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS support_messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                message TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                status TEXT DEFAULT 'pending'
-            )
-        ''')
-        
-        # جدول سوالات متداول
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS faqs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                question TEXT NOT NULL,
-                answer TEXT NOT NULL
-            )
-        ''')
-        
-        conn.commit()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS support_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    message TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT DEFAULT 'pending'
+                )
+            ''')
             
-            # conn.commit()
+            # جدول سوالات متداول
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS faqs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    question TEXT NOT NULL,
+                    answer TEXT NOT NULL
+                )
+            ''')
+            
+            conn.commit()
     
     # توابع مربوط به کاربران
     def add_user(self, telegram_id: int, username: str = None, 
@@ -394,48 +393,158 @@ class Database:
             ''', (ticket_id,))
             conn.commit()
 
-
-
+    # توابع مربوط به پشتیبانی و سوالات متداول
     def save_support_message(self, user_id: int, message: str):
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            INSERT INTO support_messages (user_id, message)
-            VALUES (?, ?)
-        ''', (user_id, message))
-        self.conn.commit()
+        """ذخیره پیام پشتیبانی"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO support_messages (user_id, message)
+                VALUES (?, ?)
+            ''', (user_id, message))
+            conn.commit()
 
-    def get_faqs(self):
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT question, answer FROM faqs')
-        faqs = cursor.fetchall()
-        return [{'question': row[0], 'answer': row[1]} for row in faqs]
-
-    def add_faq(self, question: str, answer: str):
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            INSERT INTO faqs (question, answer)
-            VALUES (?, ?)
-        ''', (question, answer))
-        self.conn.commit()
-
-    def get_support_messages(self, status='pending'):
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT id, user_id, message, created_at, status 
-            FROM support_messages 
-            WHERE status = ?
-            ORDER BY created_at DESC
-        ''', (status,))
-        return cursor.fetchall()
+    def get_support_messages(self, status='pending') -> List[Dict]:
+        """دریافت پیام‌های پشتیبانی با وضعیت مشخص"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT sm.*, u.username, u.first_name, u.last_name
+                FROM support_messages sm
+                JOIN users u ON sm.user_id = u.id
+                WHERE sm.status = ?
+                ORDER BY sm.created_at DESC
+            ''', (status,))
+            return [dict(row) for row in cursor.fetchall()]
 
     def update_message_status(self, message_id: int, status: str):
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            UPDATE support_messages 
-            SET status = ? 
-            WHERE id = ?
-        ''', (status, message_id))
-        self.conn.commit()
+        """بروزرسانی وضعیت پیام پشتیبانی"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE support_messages 
+                SET status = ? 
+                WHERE id = ?
+            ''', (status, message_id))
+            conn.commit()
 
-    def __del__(self):
-        self.conn.close()
+    def add_faq(self, question: str, answer: str) -> int:
+        """افزودن سوال متداول جدید"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO faqs (question, answer)
+                VALUES (?, ?)
+            ''', (question, answer))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_faqs(self) -> List[Dict]:
+        """دریافت لیست سوالات متداول"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM faqs')
+            return [dict(row) for row in cursor.fetchall()]
+
+    def update_faq(self, faq_id: int, question: str = None, answer: str = None):
+        """بروزرسانی سوال متداول"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            updates = []
+            params = []
+            if question is not None:
+                updates.append("question = ?")
+                params.append(question)
+            if answer is not None:
+                updates.append("answer = ?")
+                params.append(answer)
+            
+            if updates:
+                params.append(faq_id)
+                query = f"UPDATE faqs SET {', '.join(updates)} WHERE id = ?"
+                cursor.execute(query, params)
+                conn.commit()
+
+    def delete_faq(self, faq_id: int):
+        """حذف سوال متداول"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM faqs WHERE id = ?', (faq_id,))
+            conn.commit()
+
+    # توابع کمکی و تنظیمات
+    def update_user_settings(self, telegram_id: int, settings: Dict):
+        """بروزرسانی تنظیمات کاربر"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            settings_json = json.dumps(settings)
+            cursor.execute('''
+                UPDATE users 
+                SET settings = ? 
+                WHERE telegram_id = ?
+            ''', (settings_json, telegram_id))
+            conn.commit()
+
+    def get_user_settings(self, telegram_id: int) -> Dict:
+        """دریافت تنظیمات کاربر"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT settings FROM users WHERE telegram_id = ?', (telegram_id,))
+            row = cursor.fetchone()
+            if row and row['settings']:
+                return json.loads(row['settings'])
+            return {}
+
+    def get_admin_users(self) -> List[Dict]:
+        """دریافت لیست کاربران ادمین"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM users WHERE is_admin = 1')
+            return [dict(row) for row in cursor.fetchall()]
+
+    def set_admin_status(self, telegram_id: int, is_admin: bool = True):
+        """تنظیم وضعیت ادمین برای کاربر"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users 
+                SET is_admin = ? 
+                WHERE telegram_id = ?
+            ''', (is_admin, telegram_id))
+            conn.commit()
+
+    def get_statistics(self) -> Dict:
+        """دریافت آمار کلی سیستم"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            stats = {}
+            
+            # تعداد کل کاربران
+            cursor.execute('SELECT COUNT(*) as count FROM users')
+            stats['total_users'] = cursor.fetchone()['count']
+            
+            # تعداد کاربران فعال در 24 ساعت گذشته
+            cursor.execute('''
+                SELECT COUNT(*) as count 
+                FROM users 
+                WHERE last_active >= datetime('now', '-1 day')
+            ''')
+            stats['active_users_24h'] = cursor.fetchone()['count']
+            
+            # تعداد کل فایل‌ها
+            cursor.execute('SELECT COUNT(*) as count FROM files WHERE is_active = 1')
+            stats['total_files'] = cursor.fetchone()['count']
+            
+            # تعداد کل دانلودها
+            cursor.execute('SELECT SUM(download_count) as count FROM files')
+            stats['total_downloads'] = cursor.fetchone()['count'] or 0
+            
+            # تعداد تیکت‌های باز
+            cursor.execute("SELECT COUNT(*) as count FROM tickets WHERE status = 'open'")
+            stats['open_tickets'] = cursor.fetchone()['count']
+            
+            # تعداد پیام‌های پشتیبانی در انتظار
+            cursor.execute("SELECT COUNT(*) as count FROM support_messages WHERE status = 'pending'")
+            stats['pending_support_messages'] = cursor.fetchone()['count']
+            
+            return stats

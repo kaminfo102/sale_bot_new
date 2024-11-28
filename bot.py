@@ -62,45 +62,48 @@ support = Support()
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
-# async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     user = update.effective_user
-#     context.user_data.clear()
-    
-#     if is_admin(user.id):
-#         keyboard = [
-#             [InlineKeyboardButton("👤 پنل کاربری", callback_data="user_panel")],
-#             [InlineKeyboardButton("👨‍💻 پنل مدیریت", callback_data="admin_panel")]
-#         ]
-#     else:
-#         keyboard = [
-#             [InlineKeyboardButton("📁 دسته‌بندی‌ها", callback_data="categories")],
-#             [InlineKeyboardButton("🔍 جستجو", callback_data="search")],
-#             [InlineKeyboardButton("👤 پروفایل من", callback_data="profile")],
-#             [InlineKeyboardButton("📞 پشتیبانی", callback_data="support")]
-#         ]
-    
-#     reply_markup = InlineKeyboardMarkup(keyboard)
-    
-#     await update.message.reply_text(
-#         f"سلام {user.first_name} عزیز! 👋\n" + DEFAULT_MESSAGES['welcome'],
-#         reply_markup=reply_markup
-#     )
-#     return MAIN_MENU
-
-# دستور شروع
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🛍 خرید", callback_data="shop")],
-        [InlineKeyboardButton("👤 پروفایل", callback_data="profile")],
-        [InlineKeyboardButton("📞 پشتیبانی", callback_data="support_menu")]
-    ]
+    user = update.effective_user
+    context.user_data.clear()
+    
+    if is_admin(user.id):
+        keyboard = [
+            [InlineKeyboardButton("👤 پنل کاربری", callback_data="user_panel")],
+            [InlineKeyboardButton("👨‍💻 پنل مدیریت", callback_data="admin_panel")]
+            
+            
+
+        ]
+    else:
+        keyboard = [
+            [InlineKeyboardButton("📁 دسته‌بندی‌ها", callback_data="categories")],
+            [InlineKeyboardButton("🔍 جستجو", callback_data="search")],
+            [InlineKeyboardButton("👤 پروفایل من", callback_data="profile")],
+            [InlineKeyboardButton("📞 پشتیبانی", callback_data="support")]
+        ]
+    
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        "🌟 به ربات فروشگاهی ما خوش آمدید!\n"
-        "لطفاً یکی از گزینه‌های زیر را انتخاب کنید:",
+        f"سلام {user.first_name} عزیز! 👋\n" + DEFAULT_MESSAGES['welcome'],
         reply_markup=reply_markup
     )
+    return MAIN_MENU
+
+# دستور شروع
+# async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     keyboard = [
+#         [InlineKeyboardButton("🛍 خرید", callback_data="shop")],
+#         [InlineKeyboardButton("👤 پروفایل", callback_data="profile")],
+#         [InlineKeyboardButton("📞 پشتیبانی", callback_data="support_menu")]
+#     ]
+#     reply_markup = InlineKeyboardMarkup(keyboard)
+    
+#     await update.message.reply_text(
+#         "🌟 به ربات فروشگاهی ما خوش آمدید!\n"
+#         "لطفاً یکی از گزینه‌های زیر را انتخاب کنید:",
+#         reply_markup=reply_markup
+#     )
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
